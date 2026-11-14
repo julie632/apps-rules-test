@@ -33,8 +33,18 @@ views:
     operation: query_records
     binding_key: app
     source_type: business_app
+    # Search and status filter in SQL, so they reach every invoice rather
+    # than only the first 50 rows; match_count is the total before LIMIT.
     params_expression: |
-      {"sql": "SELECT workflow_instance_id, invoice_key, vendor, invoice_number, amount_cents, due_date, department, description, po_number, receipt_status, status, cost_center, review_note, payment_date, payment_reference FROM invoice_review ORDER BY due_date, invoice_key LIMIT 50", "limit": 50}
+      {"sql": "SELECT workflow_instance_id, invoice_key, vendor, invoice_number, amount_cents, due_date, department, description, po_number, receipt_status, status, cost_center, review_note, payment_date, payment_reference, COUNT(*) OVER () AS match_count FROM invoice_review WHERE ($1 = '' OR status = $1) AND (vendor ILIKE $2 OR invoice_number ILIKE $2) ORDER BY due_date, invoice_key LIMIT 50",
+       "values": [
+         inputs.status == "Needs review" ? "needs_review" : (inputs.status == "Ready to pay" ? "ready_to_pay" : (inputs.status == "Scheduled" ? "scheduled" : "")),
+         "%" + inputs.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+       ],
+       "limit": 50}
+    depends_on_inputs:
+    - q
+    - status
     result_path: /rows
     schema_refinements:
     - schema_path: /items
@@ -57,7 +67,10 @@ views:
         - review_note
         - payment_date
         - payment_reference
+        - match_count
         properties:
+          match_count:
+            type: integer
           workflow_instance_id:
             type: string
           invoice_key:
@@ -96,28 +109,54 @@ views:
             type:
             - string
             - 'null'
+  - source_key: invoice_totals
+    label: Invoice totals
+    resolver_mode: capability
+    capability: business_app
+    operation: query_records
+    binding_key: app
+    source_type: business_app
+    # Workspace counts over every invoice, independent of the queue's filters and row limit.
+    params_expression: |
+      {"sql": "SELECT COUNT(CASE WHEN status = 'needs_review' THEN 1 END) AS needs_review_count, COUNT(CASE WHEN status = 'ready_to_pay' THEN 1 END) AS ready_to_pay_count, COUNT(CASE WHEN status = 'scheduled' THEN 1 END) AS scheduled_count, COUNT(*) AS invoice_count FROM invoice_review LIMIT 1", "limit": 1}
+    result_path: /rows
+    schema_refinements:
+    - schema_path: /items
+      narrowed_schema:
+        type: object
+        additionalProperties: false
+        required:
+        - needs_review_count
+        - ready_to_pay_count
+        - scheduled_count
+        - invoice_count
+        properties:
+          needs_review_count:
+            type: integer
+          ready_to_pay_count:
+            type: integer
+          scheduled_count:
+            type: integer
+          invoice_count:
+            type: integer
   transform:
     kind: cel
-    program: "{\n \"metrics\": [\n  {\"key\":\"review\", \"label\":\"Needs review\"\
-      , \"value\":size(sources.invoices.filter(i,i.status == \"needs_review\"))},\n\
-      \  {\"key\":\"ready\", \"label\":\"Ready to pay\", \"value\":size(sources.invoices.filter(i,i.status\
-      \ == \"ready_to_pay\"))},\n  {\"key\":\"scheduled\", \"label\":\"Scheduled\"\
-      , \"value\":size(sources.invoices.filter(i,i.status == \"scheduled\"))},\n \
-      \ {\"key\":\"all\", \"label\":\"Invoices in workspace\", \"value\":size(sources.invoices)}\n\
-      \ ],\n \"rows\": sources.invoices.filter(i,\n   (inputs.status == \"All invoices\"\
-      \ || (i.status == \"needs_review\" ? \"Needs review\" : i.status == \"ready_to_pay\"\
-      \ ? \"Ready to pay\" : \"Scheduled\") == inputs.status) &&\n   (inputs.q ==\
-      \ \"\" || i.vendor.lowerAscii().contains(inputs.q.lowerAscii()) || i.invoice_number.lowerAscii().contains(inputs.q.lowerAscii()))\n\
-      \ ).map(i, {\"id\": i.workflow_instance_id, \"cells\": {\n   \"vendor\": i.vendor,\
-      \ \"invoice\": i.invoice_number, \"amount\": \"$\" + string(int(i.amount_cents)\
-      \ / 100) + \".\" + (int(i.amount_cents) % 100 < 10 ? \"0\" : \"\") + string(int(i.amount_cents)\
-      \ % 100),\n   \"due\": i.due_date, \"department\": i.department, \"status\"\
-      : (i.status == \"needs_review\" ? \"Needs review\" : i.status == \"ready_to_pay\"\
-      \ ? \"Ready to pay\" : \"Scheduled\"),\n   \"attention\": i.status != \"needs_review\"\
-      \ ? \"\u2014\" : i.receipt_status == \"missing_receipt\" ? \"Receipt required\"\
-      \ : i.receipt_status == \"price_variance\" ? \"Check price variance\" : \"Ready\
-      \ for review\"\n }, \"actions\":[{\"action_id\":\"open_invoice\", \"payload\"\
-      :{\"workflow_id\":i.workflow_instance_id}}]})\n}\n"
+    program: |
+      cel.bind(totals, sources.invoice_totals[0],
+      {
+       "metrics": [
+        {"key":"review", "label":"Needs review", "value":totals.needs_review_count},
+        {"key":"ready", "label":"Ready to pay", "value":totals.ready_to_pay_count},
+        {"key":"scheduled", "label":"Scheduled", "value":totals.scheduled_count},
+        {"key":"all", "label":"Invoices in workspace", "value":totals.invoice_count}
+       ],
+       "footer": "Demo workspace \u00b7 USD \u00b7 " + (totals.invoice_count == 0 ? "No invoices yet." : (size(sources.invoices) == 0 ? "No invoices match this search and status." : "Showing " + string(size(sources.invoices)) + " of " + string(sources.invoices[0].match_count) + " matching invoices, ordered by due date.")) + " Payment plans do not move funds.",
+       "rows": sources.invoices.map(i, {"id": i.workflow_instance_id, "cells": {
+         "vendor": i.vendor, "invoice": i.invoice_number, "amount": "$" + string(int(i.amount_cents) / 100) + "." + (int(i.amount_cents) % 100 < 10 ? "0" : "") + string(int(i.amount_cents) % 100),
+         "due": i.due_date, "department": i.department, "status": (i.status == "needs_review" ? "Needs review" : i.status == "ready_to_pay" ? "Ready to pay" : "Scheduled"),
+         "attention": i.status != "needs_review" ? "\u2014" : i.receipt_status == "missing_receipt" ? "Receipt required" : i.receipt_status == "price_variance" ? "Check price variance" : "Ready for review"
+       }, "actions":[{"action_id":"open_invoice", "payload":{"workflow_id":i.workflow_instance_id}}]})
+      })
   actions:
   - action_id: open_invoice
     kind: navigate_view
@@ -182,8 +221,8 @@ views:
     - node_kind: leaf
       component: TextBlock
       props:
-        text: "Demo workspace \xB7 USD \xB7 Showing up to 50 invoices, ordered by\
-          \ due date. Payment plans do not move funds."
+        text:
+          bind: root.footer
         tone: muted
         compact: true
 - view_key: invoice

@@ -1,3 +1,4 @@
+visualization_contract: 1
 app_slug: mini_ap
 name: Mini AP
 description: A small accounts-payable workspace for reviewing invoices and planning payments. Fictional data; no bank transfers.

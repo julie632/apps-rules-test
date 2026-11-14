@@ -1,3 +1,4 @@
+visualization_contract: 1
 title: Invoice workspace
 description: Inspect invoice evidence and the saved review and payment plan.
 definition:
@@ -6,9 +7,9 @@ definition:
     kind: string
     default_value: overview
     url_navigation: true
-  shape:
-    input_binding: data
-    expression: |
+  transform:
+    kind: cel
+    program: |
       cel.bind(record, data.record, {
         "title": string(record.invoice_number) + " · " + string(record.vendor),
         "next": record.status == "needs_review" ? "Review the invoice and confirm receipt before planning payment." :
@@ -43,9 +44,8 @@ definition:
       binding: event.active_key
   layout:
     node_kind: children
-    component: Stack
-    props:
-      gap: md
+    component: View
+    props: {classes: [flex, min-w-0, gap-4, flex-col]}
     children:
     - node_kind: children
       component: Section

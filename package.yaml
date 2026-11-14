@@ -1,37 +1,37 @@
 format_version: 2
 package_id: 7ef1b097-3471-419b-a6e6-02177b62c183
 app_slug: mini_ap
-release: '3'
+release: '4'
 parents:
 - package_id: 7ef1b097-3471-419b-a6e6-02177b62c183
-  release: '2'
-  content_sha256: 5048dd1694849b19c090e8ff295515960afda9e0350274e802fe51555587e2b4
+  release: '3'
+  content_sha256: b803443afb35adfefa9e1dd9cea416ad4a55031c556871f65af9549f7f28d4ae
 components:
 - selection:
     lineage_id: f5966b29-c344-4d98-8819-2e04c2e337ca
     kind: definition
     key: definition
-    revision: 3
-    content_sha256: f15fd6eaf9bb7d8e722dc56e2bb181baacc64ef3a755d535fb40a102fa11ed83
+    revision: 4
+    content_sha256: c1a3f77d82bc9e668bbcd8ad2d767a968e9db4dd81b1dfbd24847b584974fe0b
   derived_from: null
   files:
   - source_path: definition.yaml
     runtime_path: definition.yaml
-    sha256: 108ebcc79376da50ce5c04f9c7da19d8c8652eb66349992ea68b8bacff4dab1e
+    sha256: 00959b1eca23fede930b8ceebf82a4b756be86d36fe575617e4d6afcdbad8072
   - source_path: visualizations/payables.yaml
     runtime_path: visualizations/payables.yaml
-    sha256: 632c0df8a2ad1640b71bbd8df3cc70b8fd1c27a420798df9a138673dc862b6e5
+    sha256: 6db52b1f154eaecdff7c8a05ea98b069239db7303dd61478461dbed539e82d3d
 - selection:
     lineage_id: 5353564f-915b-48cc-b6fe-aeac95bba4d5
     kind: presentation
     key: record-invoice_review
-    revision: 1
-    content_sha256: 3efa768c3fd3edd097c33dc2c009838a87a4899eac131305e3d4d734827162d6
+    revision: 2
+    content_sha256: e082844b228f8a0a680fc33bc3e5279dd817df60a02493cf788ed00d97dca3f0
   derived_from: null
   files:
   - source_path: presentations/record-invoice_review.yaml
     runtime_path: presentation.yaml
-    sha256: c06508ae0c295c5e86103cb34e11a49caf379860ac7ed30a9362b70e71ad7801
+    sha256: eeb10f6ee1a530faa2c77250553ce414e1923573c221a307a01c5cb5bb909d4a
 bindings:
 - binding_key: definition
   component:
