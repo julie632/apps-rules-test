@@ -472,12 +472,15 @@ workflows:
         - receipt_confirmed
         properties:
           cost_center:
+            title: Cost center
             type: string
             minLength: 1
           review_note:
+            title: Review note
             type: string
             minLength: 1
           receipt_confirmed:
+            title: Receipt confirmed
             type: boolean
             const: true
     on_fulfill:
@@ -511,12 +514,15 @@ workflows:
         - receipt_confirmed
         properties:
           cost_center:
+            title: Cost center
             type: string
             minLength: 1
           review_note:
+            title: Review note
             type: string
             minLength: 1
           receipt_confirmed:
+            title: Receipt confirmed
             type: boolean
             const: true
       submission:
@@ -534,18 +540,25 @@ workflows:
           - receipt_confirmed
           properties:
             cost_center:
+              title: Cost center
               type: string
               minLength: 1
             review_note:
+              title: Review note
               type: string
               minLength: 1
             receipt_confirmed:
+              title: Receipt confirmed
               type: boolean
               const: true
         output_binding:
           transform_kind: cel
           program: input
         view_state:
+        - state_key: section
+          kind: string
+          default_value: form
+          url_navigation: true
         - state_key: review
           kind: json
           default_value:
@@ -553,6 +566,12 @@ workflows:
             review_note: ''
             receipt_confirmed: true
         actions:
+        - action_id: change_section
+          kind: set_view_state
+          updates:
+          - source: binding
+            state_key: section
+            binding: event.active_key
         - action_id: set_cost_center
           kind: set_view_state
           updates:
@@ -580,22 +599,41 @@ workflows:
             submitActionId: submit_review
             submitLabel: Confirm receipt & approve
           children:
-          - node_kind: leaf
-            component: TextInput
+          - node_kind: slots
+            component: Tabs
             props:
-              label: Cost center
-              value:
-                bind: state.review.cost_center
-              valueChangeActionId: set_cost_center
-              required: true
-          - node_kind: leaf
-            component: TextArea
-            props:
-              label: Review note
-              value:
-                bind: state.review.review_note
-              valueChangeActionId: set_review_note
-              required: true
+              tabs:
+              - key: form
+                label: Form
+              - key: guidance
+                label: Review guidance
+              activeKey:
+                bind: state.section
+              activeKeyChangeActionId: change_section
+            slots:
+              form:
+              - node_kind: leaf
+                component: TextInput
+                props:
+                  label: Cost center
+                  value:
+                    bind: state.review.cost_center
+                  valueChangeActionId: set_cost_center
+                  required: true
+              - node_kind: leaf
+                component: TextArea
+                props:
+                  label: Review note
+                  value:
+                    bind: state.review.review_note
+                  valueChangeActionId: set_review_note
+                  required: true
+              guidance:
+              - node_kind: leaf
+                component: TextBlock
+                props:
+                  text: Check the invoice against the purchase order and receipt. Resolve any price variance or missing receipt before confirming. Saving a draft does not approve the invoice.
+
   - step_key: schedule_payment
     title: Schedule payment
     description: Record a payment plan after review. This demo does not send a bank payment.
@@ -616,9 +654,11 @@ workflows:
         - payment_reference
         properties:
           payment_date:
+            title: Payment date
             type: string
             format: date
           payment_reference:
+            title: Payment reference
             type: string
             minLength: 1
     on_fulfill:
@@ -650,9 +690,11 @@ workflows:
         - payment_reference
         properties:
           payment_date:
+            title: Payment date
             type: string
             format: date
           payment_reference:
+            title: Payment reference
             type: string
             minLength: 1
       submission:
@@ -668,21 +710,33 @@ workflows:
           - payment_reference
           properties:
             payment_date:
+              title: Payment date
               type: string
               format: date
             payment_reference:
+              title: Payment reference
               type: string
               minLength: 1
         output_binding:
           transform_kind: cel
           program: input
         view_state:
+        - state_key: section
+          kind: string
+          default_value: form
+          url_navigation: true
         - state_key: payment
           kind: json
           default_value:
             payment_date: ''
             payment_reference: ''
         actions:
+        - action_id: change_section
+          kind: set_view_state
+          updates:
+          - source: binding
+            state_key: section
+            binding: event.active_key
         - action_id: set_payment_date
           kind: set_view_state
           updates:
@@ -709,22 +763,40 @@ workflows:
             submitActionId: submit_payment
             submitLabel: Schedule demo payment
           children:
-          - node_kind: leaf
-            component: TextInput
+          - node_kind: slots
+            component: Tabs
             props:
-              label: Payment date
-              value:
-                bind: state.payment.payment_date
-              valueChangeActionId: set_payment_date
-              required: true
-          - node_kind: leaf
-            component: TextInput
-            props:
-              label: Payment reference
-              value:
-                bind: state.payment.payment_reference
-              valueChangeActionId: set_payment_reference
-              required: true
+              tabs:
+              - key: form
+                label: Form
+              - key: guidance
+                label: Review guidance
+              activeKey:
+                bind: state.section
+              activeKeyChangeActionId: change_section
+            slots:
+              form:
+              - node_kind: leaf
+                component: TextInput
+                props:
+                  label: Payment date
+                  value:
+                    bind: state.payment.payment_date
+                  valueChangeActionId: set_payment_date
+                  required: true
+              - node_kind: leaf
+                component: TextInput
+                props:
+                  label: Payment reference
+                  value:
+                    bind: state.payment.payment_reference
+                  valueChangeActionId: set_payment_reference
+                  required: true
+              guidance:
+              - node_kind: leaf
+                component: TextBlock
+                props:
+                  text: Choose the intended payment date and reference after invoice review. Submitting records a plan; it does not transfer funds.
     depends_on:
     - review_invoice
 managed_visualizations:
