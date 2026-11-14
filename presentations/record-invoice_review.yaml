@@ -1,7 +1,7 @@
-visualization_contract: 1
 title: Invoice workspace
 description: Inspect invoice evidence and the saved review and payment plan.
 definition:
+  visualization_contract: 1
   view_state:
   - state_key: section
     kind: string
