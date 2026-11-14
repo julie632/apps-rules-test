@@ -1,0 +1,737 @@
+app_slug: mini_ap
+name: Mini AP
+description: A small accounts-payable workspace for reviewing invoices and planning payments. Fictional data; no bank transfers.
+lucide_icon: receipt
+contexts: []
+push_events:
+- push_event_identifier: invoice_received
+  description: A vendor invoice received for review.
+  json_schema:
+    type: object
+    additionalProperties: false
+    required:
+    - invoice_key
+    - vendor
+    - invoice_number
+    - amount_cents
+    - due_date
+    - department
+    - description
+    - po_number
+    - receipt_status
+    properties:
+      invoice_key:
+        type: string
+        minLength: 1
+      vendor:
+        type: string
+        minLength: 1
+      invoice_number:
+        type: string
+        minLength: 1
+      amount_cents:
+        type: integer
+        minimum: 1
+      due_date:
+        type: string
+        format: date
+      department:
+        type: string
+        minLength: 1
+      description:
+        type: string
+        minLength: 1
+      po_number:
+        type: string
+        minLength: 1
+      receipt_status:
+        type: string
+        enum:
+        - matched
+        - missing_receipt
+        - price_variance
+datasets:
+- dataset_key: invoices
+  label: Invoice
+  plural_label: Invoices
+  description: Vendor invoices with review and payment-plan outcomes.
+  binding_type: dynamic_database
+  binding_slug: mini_ap_invoices
+  fields:
+  - name: invoice_key
+    label: Invoice key
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Invoice key.
+    unique: true
+  - name: vendor
+    label: Vendor
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Vendor.
+  - name: invoice_number
+    label: Invoice number
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Invoice number.
+  - name: amount_cents
+    label: Amount (USD cents)
+    type: integer
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Amount (USD cents).
+  - name: due_date
+    label: Due date
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Due date.
+  - name: department
+    label: Department
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Department.
+  - name: description
+    label: Description
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Description.
+  - name: po_number
+    label: Purchase order
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Purchase order.
+  - name: receipt_status
+    label: Receipt status
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Receipt status.
+  - name: status
+    label: Status
+    type: string
+    nullable: false
+    write_access:
+    - ingress
+    - workflow
+    description: Status.
+  - name: cost_center
+    label: Cost center
+    type: string
+    nullable: true
+    write_access:
+    - workflow
+    description: Cost center.
+  - name: review_note
+    label: Review note
+    type: string
+    nullable: true
+    write_access:
+    - workflow
+    description: Review note.
+  - name: payment_date
+    label: Payment date
+    type: string
+    nullable: true
+    write_access:
+    - workflow
+    description: Payment date.
+  - name: payment_reference
+    label: Payment reference
+    type: string
+    nullable: true
+    write_access:
+    - workflow
+    description: Payment reference.
+relationships: []
+workflows:
+- workflow_key: invoice_review
+  scope_kind: record
+  dataset_key: invoices
+  title: Invoice
+  description: Review a vendor invoice, then record its payment plan. Receipt confirmation is required before approval.
+  group_key: accounts_payable
+  group_title: Accounts payable
+  group_order: 10
+  workflow_order: 10
+  source_display:
+    title: record.invoice_number
+    subtitle: record.vendor
+    columns:
+    - key: status
+      label: Status
+      source: record.status
+    - key: due_date
+      label: Due date
+      source: record.due_date
+    - key: department
+      label: Department
+      source: record.department
+  assistant:
+    description: Help explain invoice blockers and evidence. Human input steps use their submission contracts; never invent
+      receipt confirmation or bypass review.
+    suggested_tool_refs: []
+    suggested_query_access:
+      workflow_views:
+      - invoice_review
+      context_views: []
+      dataset_views:
+      - invoices
+  ingresses:
+  - ingress_kind: app_event
+    ingress_key: invoice_received
+    label: Receive invoice
+    description: Register a vendor invoice for review.
+    source_type: app
+    source_slug: business_app:mini_ap
+    push_event_identifier: invoice_received
+    event_to_record:
+      scope_title: payload.invoice_number
+      record_field_sources:
+        invoice_key:
+          source_kind: reference
+          reference: payload.invoice_key
+        vendor:
+          source_kind: reference
+          reference: payload.vendor
+        invoice_number:
+          source_kind: reference
+          reference: payload.invoice_number
+        amount_cents:
+          source_kind: reference
+          reference: payload.amount_cents
+        due_date:
+          source_kind: reference
+          reference: payload.due_date
+        department:
+          source_kind: reference
+          reference: payload.department
+        description:
+          source_kind: reference
+          reference: payload.description
+        po_number:
+          source_kind: reference
+          reference: payload.po_number
+        receipt_status:
+          source_kind: reference
+          reference: payload.receipt_status
+        status:
+          source_kind: literal
+          value: needs_review
+    event_submission:
+      title: Receive invoice
+      action_label: Add invoice
+      input_binding: state.invoice
+      input_schema:
+        type: object
+        additionalProperties: false
+        required:
+        - invoice_key
+        - vendor
+        - invoice_number
+        - amount_cents
+        - due_date
+        - department
+        - description
+        - po_number
+        - receipt_status
+        properties:
+          invoice_key:
+            type: string
+            minLength: 1
+          vendor:
+            type: string
+            minLength: 1
+          invoice_number:
+            type: string
+            minLength: 1
+          amount_cents:
+            type: string
+            pattern: ^[1-9][0-9]*$
+          due_date:
+            type: string
+            format: date
+          department:
+            type: string
+            minLength: 1
+          description:
+            type: string
+            minLength: 1
+          po_number:
+            type: string
+            minLength: 1
+          receipt_status:
+            type: string
+            enum:
+            - matched
+            - missing_receipt
+            - price_variance
+      event_payload_binding:
+        transform_kind: cel
+        program: |
+          {"invoice_key": input.invoice_key, "vendor": input.vendor, "invoice_number": input.invoice_number, "amount_cents": int(input.amount_cents), "due_date": input.due_date, "department": input.department, "description": input.description, "po_number": input.po_number, "receipt_status": input.receipt_status}
+      view_state:
+      - state_key: invoice
+        kind: json
+        default_value:
+          invoice_key: ''
+          vendor: ''
+          invoice_number: ''
+          amount_cents: ''
+          due_date: ''
+          department: ''
+          description: ''
+          po_number: ''
+          receipt_status: matched
+      actions:
+      - action_id: set_invoice_key
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.invoice_key
+          binding: event.value
+      - action_id: set_vendor
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.vendor
+          binding: event.value
+      - action_id: set_invoice_number
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.invoice_number
+          binding: event.value
+      - action_id: set_amount_cents
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.amount_cents
+          binding: event.value
+      - action_id: set_due_date
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.due_date
+          binding: event.value
+      - action_id: set_department
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.department
+          binding: event.value
+      - action_id: set_description
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.description
+          binding: event.value
+      - action_id: set_po_number
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.po_number
+          binding: event.value
+      - action_id: set_receipt_status
+        kind: set_view_state
+        updates:
+        - source: binding
+          state_key: invoice.receipt_status
+          binding: event.value
+      - action_id: submit_invoice
+        kind: submit_event
+        config:
+          workflow_key: invoice_review
+          ingress_key: invoice_received
+          input_binding: state.invoice
+          success_message: Invoice received
+      layout:
+        node_kind: children
+        component: Form
+        props:
+          title: Receive invoice
+          submitActionId: submit_invoice
+          submitLabel: Add invoice
+        children:
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Invoice key
+            value:
+              bind: state.invoice.invoice_key
+            valueChangeActionId: set_invoice_key
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Vendor
+            value:
+              bind: state.invoice.vendor
+            valueChangeActionId: set_vendor
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Invoice number
+            value:
+              bind: state.invoice.invoice_number
+            valueChangeActionId: set_invoice_number
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Due date
+            value:
+              bind: state.invoice.due_date
+            valueChangeActionId: set_due_date
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Department
+            value:
+              bind: state.invoice.department
+            valueChangeActionId: set_department
+            required: true
+        - node_kind: leaf
+          component: TextArea
+          props:
+            label: Description
+            value:
+              bind: state.invoice.description
+            valueChangeActionId: set_description
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Purchase order
+            value:
+              bind: state.invoice.po_number
+            valueChangeActionId: set_po_number
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Receipt status
+            value:
+              bind: state.invoice.receipt_status
+            valueChangeActionId: set_receipt_status
+            required: true
+        - node_kind: leaf
+          component: TextInput
+          props:
+            label: Amount (USD cents)
+            value:
+              bind: state.invoice.amount_cents
+            valueChangeActionId: set_amount_cents
+            required: true
+  steps:
+  - step_key: review_invoice
+    title: Review invoice
+    description: Confirm the goods or services were received and the invoice matches the agreed amount. Record your cost center
+      and review evidence.
+    step_kind: human_input
+    fulfillment:
+      all:
+      - check_kind: condition
+        check_key: review_recorded
+        label: Review invoice completed
+        expression: has(working_data.review) && working_data.review.receipt_confirmed
+    output_contract:
+      target: working_data.review
+      schema:
+        type: object
+        additionalProperties: false
+        required:
+        - cost_center
+        - review_note
+        - receipt_confirmed
+        properties:
+          cost_center:
+            type: string
+            minLength: 1
+          review_note:
+            type: string
+            minLength: 1
+          receipt_confirmed:
+            type: boolean
+            const: true
+    on_fulfill:
+    - effect_type: update_workflow_item
+      effect_key: record_review
+      workflow_key: invoice_review
+      dataset_key: invoices
+      field_sources:
+        status: |
+          "ready_to_pay"
+        cost_center: working_data.review.cost_center
+        review_note: working_data.review.review_note
+      completion_checks:
+        all:
+        - check_kind: effect_status
+          check_key: review_saved
+          label: Review invoice saved
+          success_statuses:
+          - succeeded
+    suggested_spec:
+      description: Confirm the goods or services were received and the invoice matches the agreed amount. Record your cost
+        center and review evidence.
+      execution_kind: manual
+      automation_mode: manual
+      completion_output_schema:
+        type: object
+        additionalProperties: false
+        required:
+        - cost_center
+        - review_note
+        - receipt_confirmed
+        properties:
+          cost_center:
+            type: string
+            minLength: 1
+          review_note:
+            type: string
+            minLength: 1
+          receipt_confirmed:
+            type: boolean
+            const: true
+      submission:
+        title: Review invoice
+        description: Confirm the goods or services were received and the invoice matches the agreed amount. Record your cost
+          center and review evidence.
+        action_label: Confirm receipt & approve
+        input_binding: state.review
+        input_schema:
+          type: object
+          additionalProperties: false
+          required:
+          - cost_center
+          - review_note
+          - receipt_confirmed
+          properties:
+            cost_center:
+              type: string
+              minLength: 1
+            review_note:
+              type: string
+              minLength: 1
+            receipt_confirmed:
+              type: boolean
+              const: true
+        output_binding:
+          transform_kind: cel
+          program: input
+        view_state:
+        - state_key: review
+          kind: json
+          default_value:
+            cost_center: ''
+            review_note: ''
+            receipt_confirmed: true
+        actions:
+        - action_id: set_cost_center
+          kind: set_view_state
+          updates:
+          - source: binding
+            state_key: review.cost_center
+            binding: event.value
+        - action_id: set_review_note
+          kind: set_view_state
+          updates:
+          - source: binding
+            state_key: review.review_note
+            binding: event.value
+        - action_id: submit_review
+          kind: submit_step_output
+          config:
+            input_binding: state.review
+            success_message: Review invoice recorded
+        layout:
+          node_kind: children
+          component: Form
+          props:
+            title: Review invoice
+            description: Confirm the goods or services were received and the invoice matches the agreed amount. Record your
+              cost center and review evidence.
+            submitActionId: submit_review
+            submitLabel: Confirm receipt & approve
+          children:
+          - node_kind: leaf
+            component: TextInput
+            props:
+              label: Cost center
+              value:
+                bind: state.review.cost_center
+              valueChangeActionId: set_cost_center
+              required: true
+          - node_kind: leaf
+            component: TextArea
+            props:
+              label: Review note
+              value:
+                bind: state.review.review_note
+              valueChangeActionId: set_review_note
+              required: true
+  - step_key: schedule_payment
+    title: Schedule payment
+    description: Record a payment plan after review. This demo does not send a bank payment.
+    step_kind: human_input
+    fulfillment:
+      all:
+      - check_kind: condition
+        check_key: payment_recorded
+        label: Schedule payment completed
+        expression: has(working_data.payment)
+    output_contract:
+      target: working_data.payment
+      schema:
+        type: object
+        additionalProperties: false
+        required:
+        - payment_date
+        - payment_reference
+        properties:
+          payment_date:
+            type: string
+            format: date
+          payment_reference:
+            type: string
+            minLength: 1
+    on_fulfill:
+    - effect_type: update_workflow_item
+      effect_key: record_payment
+      workflow_key: invoice_review
+      dataset_key: invoices
+      field_sources:
+        status: |
+          "scheduled"
+        payment_date: working_data.payment.payment_date
+        payment_reference: working_data.payment.payment_reference
+      completion_checks:
+        all:
+        - check_kind: effect_status
+          check_key: payment_saved
+          label: Schedule payment saved
+          success_statuses:
+          - succeeded
+    suggested_spec:
+      description: Record a payment plan after review. This demo does not send a bank payment.
+      execution_kind: manual
+      automation_mode: manual
+      completion_output_schema:
+        type: object
+        additionalProperties: false
+        required:
+        - payment_date
+        - payment_reference
+        properties:
+          payment_date:
+            type: string
+            format: date
+          payment_reference:
+            type: string
+            minLength: 1
+      submission:
+        title: Schedule payment
+        description: Record a payment plan after review. This demo does not send a bank payment.
+        action_label: Schedule demo payment
+        input_binding: state.payment
+        input_schema:
+          type: object
+          additionalProperties: false
+          required:
+          - payment_date
+          - payment_reference
+          properties:
+            payment_date:
+              type: string
+              format: date
+            payment_reference:
+              type: string
+              minLength: 1
+        output_binding:
+          transform_kind: cel
+          program: input
+        view_state:
+        - state_key: payment
+          kind: json
+          default_value:
+            payment_date: ''
+            payment_reference: ''
+        actions:
+        - action_id: set_payment_date
+          kind: set_view_state
+          updates:
+          - source: binding
+            state_key: payment.payment_date
+            binding: event.value
+        - action_id: set_payment_reference
+          kind: set_view_state
+          updates:
+          - source: binding
+            state_key: payment.payment_reference
+            binding: event.value
+        - action_id: submit_payment
+          kind: submit_step_output
+          config:
+            input_binding: state.payment
+            success_message: Schedule payment recorded
+        layout:
+          node_kind: children
+          component: Form
+          props:
+            title: Schedule payment
+            description: Record a payment plan after review. This demo does not send a bank payment.
+            submitActionId: submit_payment
+            submitLabel: Schedule demo payment
+          children:
+          - node_kind: leaf
+            component: TextInput
+            props:
+              label: Payment date
+              value:
+                bind: state.payment.payment_date
+              valueChangeActionId: set_payment_date
+              required: true
+          - node_kind: leaf
+            component: TextInput
+            props:
+              label: Payment reference
+              value:
+                bind: state.payment.payment_reference
+              valueChangeActionId: set_payment_reference
+              required: true
+    depends_on:
+    - review_invoice
+managed_visualizations:
+- visualization_key: payables
+  title: Invoices
+  description: Review invoices and plan payments.
+  workflow_key: invoice_review
+  nav: tab
+  nav_order: 0
+  definition_file: visualizations/payables.yaml

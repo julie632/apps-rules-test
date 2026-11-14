@@ -1,0 +1,698 @@
+title: Invoices
+description: A complete accounts-payable queue and invoice workspace, backed by shared
+  Business capabilities.
+capabilities:
+- business_app
+views:
+- view_key: main
+  title: Invoices
+  description: Accounts payable workspace
+  inputs:
+  - input_key: q
+    label: Search invoices
+    kind: string
+    default_value: ''
+  - input_key: status
+    label: Status
+    kind: enum
+    default_value: All invoices
+    options:
+    - All invoices
+    - Needs review
+    - Ready to pay
+    - Scheduled
+  source_bindings:
+  - binding_key: app
+    source_type: business_app
+    source_slug: mini_ap
+  sources:
+  - source_key: invoices
+    label: Invoices
+    resolver_mode: capability
+    capability: business_app
+    operation: query_records
+    binding_key: app
+    source_type: business_app
+    params_expression: |
+      {"sql": "SELECT workflow_instance_id, invoice_key, vendor, invoice_number, amount_cents, due_date, department, description, po_number, receipt_status, status, cost_center, review_note, payment_date, payment_reference FROM invoice_review ORDER BY due_date, invoice_key LIMIT 50", "limit": 50}
+    result_path: /rows
+    schema_refinements:
+    - schema_path: /items
+      narrowed_schema:
+        type: object
+        additionalProperties: false
+        required:
+        - workflow_instance_id
+        - invoice_key
+        - vendor
+        - invoice_number
+        - amount_cents
+        - due_date
+        - department
+        - description
+        - po_number
+        - receipt_status
+        - status
+        - cost_center
+        - review_note
+        - payment_date
+        - payment_reference
+        properties:
+          workflow_instance_id:
+            type: string
+          invoice_key:
+            type: string
+          vendor:
+            type: string
+          invoice_number:
+            type: string
+          amount_cents:
+            type: integer
+          due_date:
+            type: string
+          department:
+            type: string
+          description:
+            type: string
+          po_number:
+            type: string
+          receipt_status:
+            type: string
+          status:
+            type: string
+          cost_center:
+            type:
+            - string
+            - 'null'
+          review_note:
+            type:
+            - string
+            - 'null'
+          payment_date:
+            type:
+            - string
+            - 'null'
+          payment_reference:
+            type:
+            - string
+            - 'null'
+  transform:
+    kind: cel
+    program: "{\n \"metrics\": [\n  {\"key\":\"review\", \"label\":\"Needs review\"\
+      , \"value\":size(sources.invoices.filter(i,i.status == \"needs_review\"))},\n\
+      \  {\"key\":\"ready\", \"label\":\"Ready to pay\", \"value\":size(sources.invoices.filter(i,i.status\
+      \ == \"ready_to_pay\"))},\n  {\"key\":\"scheduled\", \"label\":\"Scheduled\"\
+      , \"value\":size(sources.invoices.filter(i,i.status == \"scheduled\"))},\n \
+      \ {\"key\":\"all\", \"label\":\"Invoices in workspace\", \"value\":size(sources.invoices)}\n\
+      \ ],\n \"rows\": sources.invoices.filter(i,\n   (inputs.status == \"All invoices\"\
+      \ || (i.status == \"needs_review\" ? \"Needs review\" : i.status == \"ready_to_pay\"\
+      \ ? \"Ready to pay\" : \"Scheduled\") == inputs.status) &&\n   (inputs.q ==\
+      \ \"\" || i.vendor.lowerAscii().contains(inputs.q.lowerAscii()) || i.invoice_number.lowerAscii().contains(inputs.q.lowerAscii()))\n\
+      \ ).map(i, {\"id\": i.workflow_instance_id, \"cells\": {\n   \"vendor\": i.vendor,\
+      \ \"invoice\": i.invoice_number, \"amount\": \"$\" + string(int(i.amount_cents)\
+      \ / 100) + \".\" + (int(i.amount_cents) % 100 < 10 ? \"0\" : \"\") + string(int(i.amount_cents)\
+      \ % 100),\n   \"due\": i.due_date, \"department\": i.department, \"status\"\
+      : (i.status == \"needs_review\" ? \"Needs review\" : i.status == \"ready_to_pay\"\
+      \ ? \"Ready to pay\" : \"Scheduled\"),\n   \"attention\": i.status != \"needs_review\"\
+      \ ? \"\u2014\" : i.receipt_status == \"missing_receipt\" ? \"Receipt required\"\
+      \ : i.receipt_status == \"price_variance\" ? \"Check price variance\" : \"Ready\
+      \ for review\"\n }, \"actions\":[{\"action_id\":\"open_invoice\", \"payload\"\
+      :{\"workflow_id\":i.workflow_instance_id}}]})\n}\n"
+  actions:
+  - action_id: open_invoice
+    kind: navigate_view
+    label: Open invoice
+    config:
+      target_view_key: invoice
+      presentation: page
+  layout:
+    node_kind: children
+    component: Page
+    props:
+      title: Accounts payable
+      description: Know what needs attention. Keep every invoice moving.
+    children:
+    - node_kind: leaf
+      component: MetricGrid
+      props:
+        items:
+          bind: root.metrics
+    - node_kind: children
+      component: Section
+      props:
+        title: Invoice queue
+        description: Review the invoice, confirm receipt, and plan payment.
+      children:
+      - node_kind: leaf
+        component: FilterBar
+        props:
+          controls:
+          - type: search
+            input_key: q
+            label: Search vendor or invoice
+          - type: select
+            input_key: status
+            label: Status
+            options:
+            - All invoices
+            - Needs review
+            - Ready to pay
+            - Scheduled
+      - node_kind: leaf
+        component: DataTable
+        props:
+          rows:
+            bind: root.rows
+          columns:
+          - key: vendor
+            header: Vendor
+          - key: invoice
+            header: Invoice
+          - key: amount
+            header: Amount
+            align: end
+          - key: due
+            header: Due
+          - key: department
+            header: Department
+          - key: status
+            header: Status
+          - key: attention
+            header: Next step
+    - node_kind: leaf
+      component: TextBlock
+      props:
+        text: "Demo workspace \xB7 USD \xB7 Showing up to 50 invoices, ordered by\
+          \ due date. Payment plans do not move funds."
+        tone: muted
+        compact: true
+- view_key: invoice
+  title: Invoice detail
+  description: Review and payment plan
+  inputs:
+  - input_key: workflow_id
+    label: Invoice
+    kind: record_id
+    required: true
+  - input_key: active_key
+    label: Workspace panel
+    kind: enum
+    default_value: review
+    options:
+    - review
+    - payment
+    - record
+  source_bindings:
+  - binding_key: app
+    source_type: business_app
+    source_slug: mini_ap
+  sources:
+  - source_key: invoice
+    label: Invoices
+    resolver_mode: capability
+    capability: business_app
+    operation: query_records
+    binding_key: app
+    source_type: business_app
+    params_expression: |
+      {"sql": "SELECT workflow_instance_id, invoice_key, vendor, invoice_number, amount_cents, due_date, department, description, po_number, receipt_status, status, cost_center, review_note, payment_date, payment_reference FROM invoice_review WHERE workflow_instance_id = '" + inputs.workflow_id.replace("'", "''") + "' LIMIT 1", "limit":1}
+    result_path: /rows
+    schema_refinements:
+    - schema_path: /items
+      narrowed_schema:
+        type: object
+        additionalProperties: false
+        required:
+        - workflow_instance_id
+        - invoice_key
+        - vendor
+        - invoice_number
+        - amount_cents
+        - due_date
+        - department
+        - description
+        - po_number
+        - receipt_status
+        - status
+        - cost_center
+        - review_note
+        - payment_date
+        - payment_reference
+        properties:
+          workflow_instance_id:
+            type: string
+          invoice_key:
+            type: string
+          vendor:
+            type: string
+          invoice_number:
+            type: string
+          amount_cents:
+            type: integer
+          due_date:
+            type: string
+          department:
+            type: string
+          description:
+            type: string
+          po_number:
+            type: string
+          receipt_status:
+            type: string
+          status:
+            type: string
+          cost_center:
+            type:
+            - string
+            - 'null'
+          review_note:
+            type:
+            - string
+            - 'null'
+          payment_date:
+            type:
+            - string
+            - 'null'
+          payment_reference:
+            type:
+            - string
+            - 'null'
+    required_inputs:
+    - workflow_id
+    depends_on_inputs:
+    - workflow_id
+  - source_key: review
+    label: Review availability
+    resolver_mode: capability
+    capability: business_app
+    operation: inspect_interaction
+    binding_key: app
+    source_type: business_app
+    params_expression: |
+      {"workflow_instance_id":inputs.workflow_id,"step_key":"review_invoice"}
+    required_inputs:
+    - workflow_id
+    depends_on_inputs:
+    - workflow_id
+  - source_key: payment
+    label: Payment availability
+    resolver_mode: capability
+    capability: business_app
+    operation: inspect_interaction
+    binding_key: app
+    source_type: business_app
+    params_expression: |
+      {"workflow_instance_id":inputs.workflow_id,"step_key":"schedule_payment"}
+    required_inputs:
+    - workflow_id
+    depends_on_inputs:
+    - workflow_id
+  view_state:
+  - state_key: review
+    kind: json
+    default_value:
+      cost_center: ''
+      review_note: ''
+      receipt_confirmed: false
+      receipt_label: Receipt has not been confirmed
+  - state_key: payment
+    kind: json
+    default_value:
+      payment_date: ''
+      payment_reference: ''
+  transform:
+    kind: cel
+    program: "has(sources.invoice) && has(sources.review) && has(sources.payment)\
+      \ && size(sources.invoice.values) > 0 ? sources.invoice.values.map(i, {\n \"\
+      record\": {\"workflow_instance_id\": i.workflow_instance_id, \"invoice_number\"\
+      : i.invoice_number, \"vendor\": i.vendor, \"amount_cents\": i.amount_cents,\
+      \ \"department\": i.department, \"cost_center\": has(i.cost_center) ? i.cost_center\
+      \ : null, \"review_note\": has(i.review_note) ? i.review_note : null, \"receipt_status\"\
+      : i.receipt_status, \"status\": i.status, \"payment_date\": has(i.payment_date)\
+      \ ? i.payment_date : null, \"payment_reference\": has(i.payment_reference) ?\
+      \ i.payment_reference : null},\n \"title\": i.invoice_number + \" \xB7 \" +\
+      \ i.vendor,\n \"amount\": \"$\" + string(int(i.amount_cents) / 100) + \".\"\
+      \ + (int(i.amount_cents) % 100 < 10 ? \"0\" : \"\") + string(int(i.amount_cents)\
+      \ % 100),\n \"status\": (i.status == \"needs_review\" ? \"Needs review\" : i.status\
+      \ == \"ready_to_pay\" ? \"Ready to pay\" : \"Scheduled\"),\n \"description\"\
+      : i.description,\n \"next\": i.status == \"needs_review\" ? \"Confirm receipt\
+      \ and record your review to release this invoice for payment.\" : i.status ==\
+      \ \"ready_to_pay\" ? \"Review complete. This invoice is ready for a payment\
+      \ plan.\" : \"Payment plan recorded. No funds have been moved.\",\n \"facts\"\
+      : [{\"label\":\"Invoice number\",\"value\":i.invoice_number},\n{\"label\":\"\
+      Vendor\",\"value\":i.vendor},\n{\"label\":\"Purchase order\",\"value\":i.po_number},\n\
+      {\"label\":\"Due date\",\"value\":i.due_date},\n{\"label\":\"Department\",\"\
+      value\":i.department},\n{\"label\":\"Receipt status at intake\",\"value\":i.receipt_status}],\n\
+      \ \"outcome\": [{\"label\":\"Cost center\",\"value\":has(i.cost_center) ? i.cost_center\
+      \ : \"Not reviewed\"}, {\"label\":\"Review note\",\"value\":has(i.review_note)\
+      \ ? i.review_note : \"\u2014\"}, {\"label\":\"Payment date\",\"value\":has(i.payment_date)\
+      \ ? i.payment_date : \"Not scheduled\"}, {\"label\":\"Payment reference\",\"\
+      value\":has(i.payment_reference) ? i.payment_reference : \"\u2014\"}],\n \"\
+      review_context_seq\":sources.review.context_seq, \"payment_context_seq\":sources.payment.context_seq,\n\
+      \ \"review_disabled\":!has(sources.review.submission.value_BusinessSubmissionAvailable),\n\
+      \ \"payment_disabled\":!has(sources.payment.submission.value_BusinessSubmissionAvailable)\n\
+      })[0] : {\n \"record\": null, \"title\":\"Invoice unavailable\", \"amount\"\
+      :\"\u2014\", \"status\":\"Unavailable\", \"description\":\"\",\n \"next\":\"\
+      Select an invoice from the queue.\", \"facts\":[], \"outcome\":[],\n \"review_context_seq\"\
+      :0, \"payment_context_seq\":0, \"review_disabled\":true, \"payment_disabled\"\
+      :true\n}\n"
+  actions:
+  - action_id: back
+    kind: navigate_view
+    label: All invoices
+    config:
+      target_view_key: main
+      presentation: page
+  - action_id: change_panel
+    kind: navigate_view
+    label: Change invoice panel
+    config:
+      target_view_key: invoice
+      payload_field: event
+      presentation: page
+  - action_id: set_cost_center
+    kind: set_view_state
+    updates:
+    - source: binding
+      state_key: review.cost_center
+      binding: event.value
+  - action_id: set_review_note
+    kind: set_view_state
+    updates:
+    - source: binding
+      state_key: review.review_note
+      binding: event.value
+  - action_id: submit_review
+    kind: invoke_capability
+    label: Confirm receipt & approve
+    config:
+      capability: business_app
+      binding_key: app
+      operation: act_on_workflow_item
+      params:
+        workflow_instance_id:
+          bind: inputs.workflow_id
+        step_key: review_invoice
+        idempotency_key:
+          bind: runtime.request_id
+        action:
+          kind: submit_step
+          request:
+            expected_context_seq:
+              bind: root.review_context_seq
+            input:
+              cost_center:
+                bind: state.review.cost_center
+              review_note:
+                bind: state.review.review_note
+              receipt_confirmed:
+                bind: state.review.receipt_confirmed
+  - action_id: set_payment_date
+    kind: set_view_state
+    updates:
+    - source: binding
+      state_key: payment.payment_date
+      binding: event.value
+  - action_id: set_payment_reference
+    kind: set_view_state
+    updates:
+    - source: binding
+      state_key: payment.payment_reference
+      binding: event.value
+  - action_id: submit_payment
+    kind: invoke_capability
+    label: Schedule demo payment
+    config:
+      capability: business_app
+      binding_key: app
+      operation: act_on_workflow_item
+      params:
+        workflow_instance_id:
+          bind: inputs.workflow_id
+        step_key: schedule_payment
+        idempotency_key:
+          bind: runtime.request_id
+        action:
+          kind: submit_step
+          request:
+            expected_context_seq:
+              bind: root.payment_context_seq
+            input:
+              payment_date:
+                bind: state.payment.payment_date
+              payment_reference:
+                bind: state.payment.payment_reference
+  - action_id: confirm_receipt
+    kind: set_view_state
+    updates:
+    - source: literal
+      state_key: review.receipt_confirmed
+      value: true
+    - source: literal
+      state_key: review.receipt_label
+      value: Receipt confirmed by you
+  - action_id: clear_receipt
+    kind: set_view_state
+    updates:
+    - source: literal
+      state_key: review.receipt_confirmed
+      value: false
+    - source: literal
+      state_key: review.receipt_label
+      value: Receipt has not been confirmed
+  layout:
+    node_kind: children
+    component: Page
+    props:
+      title:
+        bind: root.title
+      description: Accounts payable / Invoice workspace
+    children:
+    - node_kind: leaf
+      component: ActionButton
+      props:
+        label: "\u2190 All invoices"
+        actionId: back
+        variant: ghost
+    - node_kind: leaf
+      component: TextBlock
+      props:
+        text:
+          bind: root.next
+    - node_kind: slots
+      component: SplitPane
+      props:
+        mode: fixed_split
+      slots:
+        primary:
+        - node_kind: children
+          component: Section
+          props:
+            title: Invoice details
+          children:
+          - node_kind: children
+            component: Section
+            props:
+              title:
+                bind: root.amount
+              description: "Invoice total \xB7 USD"
+            children: []
+          - node_kind: leaf
+            component: StatusBadge
+            props:
+              label:
+                bind: root.status
+          - node_kind: leaf
+            component: KeyValueList
+            props:
+              items:
+                bind: root.facts
+              columns: 2
+          - node_kind: children
+            component: Section
+            props:
+              title: What you are paying for
+            children:
+            - node_kind: leaf
+              component: TextBlock
+              props:
+                text:
+                  bind: root.description
+        detail:
+        - node_kind: slots
+          component: Tabs
+          props:
+            tabs:
+            - key: review
+              label: Review & coding
+            - key: payment
+              label: Payment plan
+            - key: record
+              label: Saved record
+            activeKey:
+              bind: inputs.active_key
+            activeKeyChangeActionId: change_panel
+          slots:
+            review:
+            - node_kind: children
+              component: Form
+              props:
+                title: Review & coding
+                description: Check the amount and purchase order, confirm receipt,
+                  and record the approved cost center.
+                submitActionId: submit_review
+                submitLabel: Review submission
+                disabled:
+                  bind: root.review_disabled
+              children:
+              - node_kind: children
+                component: Section
+                props:
+                  title: Receipt confirmation
+                  description: Make this choice from evidence you have reviewed.
+                children:
+                - node_kind: leaf
+                  component: TextBlock
+                  props:
+                    text:
+                      bind: state.review.receipt_label
+                - node_kind: leaf
+                  component: ActionButton
+                  props:
+                    label: Confirm goods or services received
+                    actionId: confirm_receipt
+                    variant: outline
+                    disabled:
+                      bind: root.review_disabled
+                - node_kind: leaf
+                  component: ActionButton
+                  props:
+                    label: Not confirmed
+                    actionId: clear_receipt
+                    variant: ghost
+                    disabled:
+                      bind: root.review_disabled
+              - node_kind: leaf
+                component: TextInput
+                props:
+                  label: Cost center
+                  value:
+                    bind: state.review.cost_center
+                  valueChangeActionId: set_cost_center
+                  required: true
+                  disabled:
+                    bind: root.review_disabled
+              - node_kind: leaf
+                component: TextArea
+                props:
+                  label: Review note
+                  value:
+                    bind: state.review.review_note
+                  valueChangeActionId: set_review_note
+                  required: true
+                  disabled:
+                    bind: root.review_disabled
+              - node_kind: leaf
+                component: TextBlock
+                props:
+                  text: Your entries are a private draft. The next screen shows exactly
+                    what will be saved.
+                  tone: muted
+                  compact: true
+            payment:
+            - node_kind: children
+              component: Form
+              props:
+                title: Payment plan
+                description: Record a payment plan after review. This demo does not
+                  send a bank payment.
+                submitActionId: submit_payment
+                submitLabel: Review payment plan
+                disabled:
+                  bind: root.payment_disabled
+              children:
+              - node_kind: leaf
+                component: TextInput
+                props:
+                  label: Payment date
+                  value:
+                    bind: state.payment.payment_date
+                  valueChangeActionId: set_payment_date
+                  required: true
+                  disabled:
+                    bind: root.payment_disabled
+                  placeholder: YYYY-MM-DD
+              - node_kind: leaf
+                component: TextInput
+                props:
+                  label: Payment reference
+                  value:
+                    bind: state.payment.payment_reference
+                  valueChangeActionId: set_payment_reference
+                  required: true
+                  disabled:
+                    bind: root.payment_disabled
+            record:
+            - node_kind: children
+              component: Section
+              props:
+                title: Review & payment record
+                description: Saved workflow values. Form drafts are private until
+                  you confirm a submission.
+              children:
+              - node_kind: leaf
+                component: KeyValueList
+                props:
+                  items:
+                    bind: root.outcome
+                  columns: 2
+  semantic_fields:
+  - field_key: workflow_instance_id
+    label: Workflow instance
+    description: Identity of the workflow that owns this invoice.
+    data_pointer: /record/workflow_instance_id
+  - field_key: invoice_number
+    label: Invoice number
+    description: Vendor invoice reference.
+    data_pointer: /record/invoice_number
+  - field_key: vendor
+    label: Vendor
+    description: Supplier named on the invoice.
+    data_pointer: /record/vendor
+  - field_key: amount_cents
+    label: Invoice amount in USD cents
+    description: Invoice total as integer USD cents.
+    data_pointer: /record/amount_cents
+  - field_key: department
+    label: Department at intake
+    description: Department recorded when the invoice arrived; this is not its approved
+      cost center.
+    data_pointer: /record/department
+  - field_key: cost_center
+    label: Approved cost center
+    description: Cost center saved by invoice review. Null means no saved review coding.
+    data_pointer: /record/cost_center
+  - field_key: review_note
+    label: Saved review note
+    description: Evidence and reasoning recorded by the completed review, never the
+      current form draft.
+    data_pointer: /record/review_note
+  - field_key: receipt_status
+    label: Receipt status at intake
+    description: Original intake flag. Approval requires a separate explicit receipt
+      confirmation.
+    data_pointer: /record/receipt_status
+  - field_key: status
+    label: Invoice status
+    description: 'Saved workflow status: needs_review, ready_to_pay, or scheduled.'
+    data_pointer: /record/status
+  - field_key: payment_date
+    label: Planned payment date
+    description: Saved demo payment date. Null means no payment plan.
+    data_pointer: /record/payment_date
+  - field_key: payment_reference
+    label: Payment reference
+    description: Saved demo payment reference; does not represent a bank transfer.
+    data_pointer: /record/payment_reference
+  draft_identity_inputs:
+  - workflow_id

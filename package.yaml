@@ -1,0 +1,28 @@
+format_version: 2
+package_id: 7ef1b097-3471-419b-a6e6-02177b62c183
+app_slug: mini_ap
+release: '1'
+parents: []
+components:
+- selection:
+    lineage_id: f5966b29-c344-4d98-8819-2e04c2e337ca
+    kind: definition
+    key: definition
+    revision: 1
+    content_sha256: bf0821064add8179b40ab154daf4a4b1dda34da19724f1700b015e8dae7ece9c
+  derived_from: null
+  files:
+  - source_path: definition.yaml
+    runtime_path: definition.yaml
+    sha256: a3d6b95371a946435cb9f55768abd47ce3061382b99946a3e9f079f4f8ef40f2
+  - source_path: visualizations/payables.yaml
+    runtime_path: visualizations/payables.yaml
+    sha256: 632c0df8a2ad1640b71bbd8df3cc70b8fd1c27a420798df9a138673dc862b6e5
+bindings:
+- binding_key: definition
+  component:
+    kind: definition
+    key: definition
+  destination:
+    kind: definition
+  readiness: ready
