@@ -206,12 +206,11 @@ workflows:
     ingress_key: invoice_received
     label: Receive invoice
     description: Register a vendor invoice for review.
-    source_type: app
-    source_slug: business_app:mini_ap
     push_event_identifier: invoice_received
-    event_to_record:
+    delivery:
+      kind: record
       scope_title: payload.invoice_number
-      record_field_sources:
+      field_sources:
         invoice_key:
           source_kind: reference
           reference: payload.invoice_key

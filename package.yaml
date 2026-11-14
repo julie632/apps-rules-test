@@ -1,23 +1,23 @@
 format_version: 2
 package_id: 7ef1b097-3471-419b-a6e6-02177b62c183
 app_slug: mini_ap
-release: '2'
+release: '3'
 parents:
 - package_id: 7ef1b097-3471-419b-a6e6-02177b62c183
-  release: '1'
-  content_sha256: 3d05546d7ed34aaa08285842aab99176c5e843b12d02414a017ee2ff66827bd5
+  release: '2'
+  content_sha256: 5048dd1694849b19c090e8ff295515960afda9e0350274e802fe51555587e2b4
 components:
 - selection:
     lineage_id: f5966b29-c344-4d98-8819-2e04c2e337ca
     kind: definition
     key: definition
-    revision: 2
-    content_sha256: 4fe74810b0f01380b583589c399e31680e026004f34d7e51864b70c34e3e1540
+    revision: 3
+    content_sha256: f15fd6eaf9bb7d8e722dc56e2bb181baacc64ef3a755d535fb40a102fa11ed83
   derived_from: null
   files:
   - source_path: definition.yaml
     runtime_path: definition.yaml
-    sha256: a8bdf0ffa65ddffb80ab1a697e681849d2a2c97b3c7039e76d365ae15842188c
+    sha256: 108ebcc79376da50ce5c04f9c7da19d8c8652eb66349992ea68b8bacff4dab1e
   - source_path: visualizations/payables.yaml
     runtime_path: visualizations/payables.yaml
     sha256: 632c0df8a2ad1640b71bbd8df3cc70b8fd1c27a420798df9a138673dc862b6e5
