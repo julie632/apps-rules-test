@@ -1,0 +1,352 @@
+visualization_contract: 1
+app_slug: rules_lab
+name: Rules Lab
+description: Throwaway app for exercising direct edits, resets, halts, step-by-step runs and freshness.
+lucide_icon: flask-conical
+
+push_events:
+  - push_event_identifier: order_submit
+    description: An order submitted by a person.
+    json_schema:
+      type: object
+      additionalProperties: false
+      required: [order_key, customer, received_at]
+      properties:
+        order_key: { type: string, minLength: 1 }
+        customer: { type: string, minLength: 1 }
+        received_at: { type: string, format: date-time }
+
+contexts: []
+
+datasets:
+  - dataset_key: orders
+    label: Order
+    plural_label: Orders
+    description: One order per workflow; the computation writes its totals back here.
+    binding_type: dynamic_database
+    binding_slug: rules_lab_orders
+    fields:
+      - { name: order_key, label: Order key, type: string, unique: true, nullable: false, write_access: [ingress, workflow], description: Order key. }
+      - { name: customer, label: Customer, type: string, nullable: false, write_access: [ingress, workflow, user], description: Customer. }
+      - { name: line_count, label: Line count, type: integer, nullable: true, write_access: [workflow], description: Line count written by the workflow. }
+      - { name: first_amount, label: First amount, type: number, nullable: true, write_access: [workflow], description: First amount written by the workflow. }
+      - { name: status, label: Status, type: string, nullable: true, write_access: [ingress, workflow], description: Order status. }
+  - dataset_key: order_lines
+    label: Order line
+    plural_label: Order lines
+    description: Rows the order's first step persists; each one has a line-check workflow.
+    binding_type: dynamic_database
+    binding_slug: rules_lab_order_lines
+    fields:
+      - { name: line_key, label: Line key, type: string, unique: true, nullable: false, write_access: [workflow], description: Line key. }
+      - { name: order_key, label: Order key, type: string, nullable: false, write_access: [workflow], description: Owning order. }
+      - { name: amount, label: Amount, type: number, nullable: true, write_access: [workflow], description: "Amount; written by the order's upsert." }
+      - { name: checked, label: Checked, type: string, nullable: true, write_access: [workflow], description: Set by the line check. }
+
+relationships: []
+
+workflow_relationships:
+  - key: order_line_checks
+    from_workflow_key: order
+    to_workflow_key: line_check
+    description: An order opens one line check per entered line.
+
+workflows:
+  - workflow_key: order
+    scope_kind: record
+    dataset_key: orders
+    record_kind: order
+    title: Order
+    description: Enter lines, compute totals automatically, review; each line gets its own check.
+    group_key: orders
+    group_title: Orders
+    group_order: 10
+    workflow_order: 10
+    source_display:
+      title: record.order_key
+      subtitle: record.customer
+      columns:
+        - { key: customer, label: Customer, source: record.customer }
+        - { key: status, label: Status, source: record.status }
+        - { key: line_count, label: Lines, source: record.line_count }
+        - { key: first_amount, label: First amount, source: record.first_amount }
+    ingresses:
+      - ingress_kind: app_event
+        ingress_key: order_submit
+        label: Order submitted
+        push_event_identifier: order_submit
+        delivery:
+          kind: record
+          scope_title: payload.order_key
+          received_at: payload.received_at
+          field_sources:
+            order_key: { source_kind: reference, reference: payload.order_key }
+            customer: { source_kind: reference, reference: payload.customer }
+            status: { source_kind: literal, value: new }
+        event_submission:
+          title: Submit order
+          description: Open an order for a customer.
+          action_label: Submit order
+          input_binding: state.order
+          input_schema:
+            type: object
+            additionalProperties: false
+            required: [order_key, customer]
+            properties:
+              order_key: { type: string, minLength: 1 }
+              customer: { type: string, minLength: 1 }
+          event_payload_binding:
+            transform_kind: cel
+            affordances: []
+            program: |
+              {
+                "order_key": input.order_key,
+                "customer": input.customer,
+                "received_at": submission.received_at
+              }
+          view_state:
+            - state_key: order
+              kind: json
+              default_value:
+                order_key: ""
+                customer: ""
+          actions:
+            - action_id: set_order_key
+              kind: set_view_state
+              updates:
+                - source: binding
+                  state_key: order.order_key
+                  binding: event.value
+            - action_id: set_customer
+              kind: set_view_state
+              updates:
+                - source: binding
+                  state_key: order.customer
+                  binding: event.value
+            - action_id: submit_order
+              kind: submit_event
+              config:
+                workflow_key: order
+                ingress_key: order_submit
+                input_binding: state.order
+                success_message: Order submitted
+          layout:
+            component: Form
+            props:
+              title: Submit order
+              description: Open an order; its lines are entered in the workflow.
+              submitActionId: submit_order
+              submitLabel: Submit order
+            children:
+              - component: TextInput
+                props:
+                  label: Order key
+                  value: { bind: state.order.order_key }
+                  placeholder: O-100
+                  valueChangeActionId: set_order_key
+                  required: true
+              - component: TextInput
+                props:
+                  label: Customer
+                  value: { bind: state.order.customer }
+                  placeholder: Customer name
+                  valueChangeActionId: set_customer
+                  required: true
+    steps:
+      - step_key: enter_lines
+        title: Enter lines
+        description: Type the order lines. Each one is persisted as a row and gets a line-check workflow.
+        step_kind: human_input
+        fulfillment:
+          all:
+            - check_kind: condition
+              check_key: lines_entered
+              label: Lines entered
+              expression: has(working_data.lines_entry) && size(working_data.lines_entry.lines) > 0
+        output_contract:
+          target: working_data.lines_entry
+          schema:
+            type: object
+            additionalProperties: false
+            required: [note, lines]
+            properties:
+              note: { type: string }
+              lines:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [line_key, amount]
+                  properties:
+                    line_key: { type: string, minLength: 1 }
+                    amount: { type: number }
+        suggested_spec:
+          description: Enter the order lines by hand.
+          execution_kind: manual
+          input_fields:
+            customer: record.customer
+        # Order matters: the line checks open their rows first, by key only,
+        # and the upsert that follows owns the amount. On a re-run after an
+        # edit the create effect finds its scopes and is skipped, while the
+        # upsert is stale and rewrites the amount.
+        on_fulfill:
+          - effect_type: create_workflow_item
+            effect_key: open_line_checks
+            description: Open a line-check workflow (and its row) for each line.
+            workflow_key: line_check
+            dataset_key: order_lines
+            for_each: working_data.lines_entry.lines
+            item_alias: line
+            scope_key: record.order_key + ':' + line.line_key
+            idempotency_key: record.order_key + ':' + line.line_key
+            relationship_key: order_line_checks
+            field_sources:
+              line_key: record.order_key + ':' + line.line_key
+              order_key: record.order_key
+          - effect_type: upsert_dataset_records
+            effect_key: persist_lines
+            description: Write each line's amount onto its order-line row.
+            dataset_key: order_lines
+            match_fields: [line_key]
+            for_each: working_data.lines_entry.lines
+            item_alias: line
+            field_sources:
+              line_key: record.order_key + ':' + line.line_key
+              order_key: record.order_key
+              amount: line.amount
+      - step_key: compute_totals
+        title: Compute totals
+        description: Counts the lines and notes the first amount; runs by itself and writes the order row. Its stamp changes on every run.
+        step_kind: action
+        depends_on: [enter_lines]
+        fulfillment:
+          all:
+            - check_kind: condition
+              check_key: totals_present
+              label: Totals present
+              expression: has(working_data.totals) && has(working_data.totals.line_count)
+            - check_kind: condition
+              check_key: not_returned
+              label: Reviewer feedback addressed
+              expression: '!has(working_data.review) || working_data.review.decision != "rework" || !has(working_data.review.reviewed_stamp) || !has(working_data.totals) || working_data.review.reviewed_stamp != working_data.totals.stamp'
+        output_contract:
+          target: working_data.totals
+          schema:
+            type: object
+            additionalProperties: false
+            required: [line_count, first_amount, stamp]
+            properties:
+              line_count: { type: integer }
+              first_amount: { type: number }
+              stamp: { type: integer }
+        suggested_spec:
+          description: Count the lines and pick the first amount, deterministically.
+          execution_kind: programmatic
+          automation_mode: automatic
+          input_fields:
+            lines: working_data.lines_entry.lines
+            review_decision: working_data.review.decision
+            # Bookkeeping, not an input that can go stale: it gives each run
+            # a stamp the review refers to.
+            seq: workflow.mutation_seq
+          stages:
+            - stage_type: final
+              stage_key: final
+              source:
+                final_kind: transform
+                program: '{"line_count": size(input.lines), "first_amount": input.lines[0].amount, "stamp": input.seq}'
+        on_fulfill:
+          - effect_type: update_workflow_item
+            effect_key: write_totals
+            description: Write the totals onto the order row.
+            workflow_key: order
+            dataset_key: orders
+            field_sources:
+              line_count: working_data.totals.line_count
+              first_amount: working_data.totals.first_amount
+      - step_key: review
+        title: Review totals
+        description: Approve the totals, or return them for rework; enter the stamp of the totals you looked at.
+        step_kind: human_input
+        depends_on: [compute_totals]
+        fulfillment:
+          all:
+            - check_kind: condition
+              check_key: current_revision_approved
+              label: Current revision approved
+              expression: 'has(working_data.review) && working_data.review.decision == "approved" && has(working_data.review.reviewed_stamp) && has(working_data.totals) && working_data.review.reviewed_stamp == working_data.totals.stamp'
+        output_contract:
+          target: working_data.review
+          schema:
+            type: object
+            additionalProperties: false
+            required: [decision, reviewed_stamp, notes]
+            properties:
+              decision: { type: string, enum: [approved, rework] }
+              reviewed_stamp: { type: integer }
+              notes: { type: string }
+        suggested_spec:
+          description: Review the computed totals.
+          execution_kind: manual
+          input_fields:
+            totals: working_data.totals
+        on_fulfill:
+          - effect_type: update_workflow_item
+            effect_key: mark_approved
+            description: Mark the order approved.
+            workflow_key: order
+            dataset_key: orders
+            field_sources:
+              status: '"approved"'
+  - workflow_key: line_check
+    scope_kind: record
+    dataset_key: order_lines
+    record_kind: order_line
+    title: Line check
+    description: Confirm one persisted line. Its input is the row's amount, so a rewrite of the row makes a finished check stale.
+    group_key: orders
+    group_title: Orders
+    group_order: 10
+    workflow_order: 20
+    source_display:
+      title: record.line_key
+      subtitle: record.order_key
+      columns:
+        - { key: amount, label: Amount, source: record.amount }
+        - { key: checked, label: Checked, source: record.checked }
+    ingresses: []
+    steps:
+      - step_key: confirm_line
+        title: Confirm line
+        description: Confirm the line amount as persisted.
+        step_kind: human_input
+        fulfillment:
+          all:
+            - check_kind: condition
+              check_key: confirmed
+              label: Confirmed
+              expression: has(working_data.confirmation) && working_data.confirmation.ok
+        output_contract:
+          target: working_data.confirmation
+          schema:
+            type: object
+            additionalProperties: false
+            required: [ok, comment]
+            properties:
+              ok: { type: boolean }
+              comment: { type: string }
+        suggested_spec:
+          description: Confirm the line by hand.
+          execution_kind: manual
+          input_fields:
+            amount: record.amount
+            order_key: record.order_key
+        on_fulfill:
+          - effect_type: update_workflow_item
+            effect_key: mark_checked
+            description: Mark the line checked.
+            workflow_key: line_check
+            dataset_key: order_lines
+            field_sources:
+              checked: '"yes"'

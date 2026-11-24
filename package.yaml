@@ -1,0 +1,25 @@
+format_version: 2
+package_id: 4de2ce1a-1d08-408c-9a86-0236326fa0d8
+app_slug: rules_lab
+release: '3'
+parents: []
+components:
+- selection:
+    lineage_id: 23a828a9-3b63-4dee-8f4e-33ee22952569
+    kind: definition
+    key: definition
+    revision: 1
+    content_sha256: 2f51ced38e39afaeb1867ed11292a8902845f733a5d298e27fd7d8423b5bae57
+  derived_from: null
+  files:
+  - source_path: definition.yaml
+    runtime_path: definition.yaml
+    sha256: ff144c92d2f0980fceb3c1f67ede51847ee99a145b36c96b54cfed33f8ab81f5
+bindings:
+- binding_key: definition
+  component:
+    kind: definition
+    key: definition
+  destination:
+    kind: definition
+  readiness: ready
