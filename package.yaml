@@ -1,7 +1,7 @@
 format_version: 2
 package_id: 4de2ce1a-1d08-408c-9a86-0236326fa0d8
 app_slug: rules_lab
-release: '3'
+release: '1'
 parents: []
 components:
 - selection:
@@ -9,12 +9,12 @@ components:
     kind: definition
     key: definition
     revision: 1
-    content_sha256: 2f51ced38e39afaeb1867ed11292a8902845f733a5d298e27fd7d8423b5bae57
+    content_sha256: 2e69538a77e28feaec0b7665f12197ca4534556e65af5412381f944ec002095b
   derived_from: null
   files:
   - source_path: definition.yaml
     runtime_path: definition.yaml
-    sha256: ff144c92d2f0980fceb3c1f67ede51847ee99a145b36c96b54cfed33f8ab81f5
+    sha256: 8327e60dca32f1b056cbe00564ca2a71bd17ef3de87bd664cb05cdc89a1f90cb
 bindings:
 - binding_key: definition
   component:
