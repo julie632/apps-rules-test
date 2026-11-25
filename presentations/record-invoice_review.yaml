@@ -1,0 +1,103 @@
+title: Invoice workspace
+description: Inspect invoice evidence and the saved review and payment plan.
+definition:
+  visualization_contract: 1
+  view_state:
+  - state_key: section
+    kind: string
+    default_value: overview
+    url_navigation: true
+  transform:
+    kind: cel
+    program: |
+      cel.bind(record, data.record, {
+        "title": string(record.invoice_number) + " · " + string(record.vendor),
+        "next": record.status == "needs_review" ? "Review the invoice and confirm receipt before planning payment." :
+          record.status == "ready_to_pay" ? "Review is complete. Record the payment date and reference in outstanding work." :
+          "Payment plan recorded. No bank transfer has been made.",
+        "invoice": [
+          {"label": "Vendor", "value": string(record.vendor)},
+          {"label": "Invoice", "value": string(record.invoice_number)},
+          {"label": "Amount (USD)", "value": string(double(record.amount_cents) / 100.0)},
+          {"label": "Due date", "value": string(record.due_date)},
+          {"label": "Purchase order", "value": string(record.po_number)},
+          {"label": "Department", "value": string(record.department)}
+        ],
+        "description": string(record.description),
+        "evidence": record.receipt_status == "missing_receipt" ? "Receipt evidence is missing. Obtain it before confirming receipt." :
+          record.receipt_status == "price_variance" ? "The intake flagged a price variance. Resolve it and document your reasoning before confirming the review." :
+          "The intake reports a match. The reviewer must still check the evidence and explicitly confirm receipt.",
+        "saved": [
+          {"label": "Cost center", "value": has(record.cost_center) && record.cost_center != null ? string(record.cost_center) : "Not submitted"},
+          {"label": "Review note", "value": has(record.review_note) && record.review_note != null ? string(record.review_note) : "Not submitted"},
+          {"label": "Payment date", "value": has(record.payment_date) && record.payment_date != null ? string(record.payment_date) : "Not planned"},
+          {"label": "Payment reference", "value": has(record.payment_reference) && record.payment_reference != null ? string(record.payment_reference) : "Not planned"}
+        ]
+      })
+    output_schema: {}
+  actions:
+  - action_id: change_section
+    kind: set_view_state
+    updates:
+    - source: binding
+      state_key: section
+      binding: event.active_key
+  layout:
+    node_kind: children
+    component: View
+    props: {classes: [flex, min-w-0, gap-4, flex-col]}
+    children:
+    - node_kind: children
+      component: Section
+      props:
+        title:
+          bind: title
+        description:
+          bind: next
+      children:
+      - node_kind: leaf
+        component: KeyValueList
+        props:
+          items:
+            bind: invoice
+          columns: 2
+          surface: plain
+    - node_kind: slots
+      component: Tabs
+      props:
+        tabs:
+        - key: overview
+          label: Evidence
+        - key: saved
+          label: Saved outcome
+        activeKey:
+          bind: state.section
+        activeKeyChangeActionId: change_section
+      slots:
+        overview:
+        - node_kind: leaf
+          component: TextBlock
+          props:
+            text:
+              bind: description
+        - node_kind: leaf
+          component: TextBlock
+          props:
+            text:
+              bind: evidence
+        saved:
+        - node_kind: leaf
+          component: TextBlock
+          props:
+            text: These are submitted workflow values. Shared drafts appear in the step workspace until submitted.
+            compact: true
+            tone: muted
+        - node_kind: leaf
+          component: KeyValueList
+          props:
+            items:
+              bind: saved
+            columns: 2
+            surface: plain
+compatibility:
+  kind: business_record

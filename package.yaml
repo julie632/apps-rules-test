@@ -1,0 +1,48 @@
+format_version: 2
+package_id: 2dd15244-a7d9-480e-97ee-ad00835017dd
+app_slug: e2e_lab
+release: '5'
+parents: []
+components:
+- selection:
+    lineage_id: 5b0f889c-518a-4458-a606-a39329b0d22a
+    kind: definition
+    key: definition
+    revision: 1
+    content_sha256: f41edb69d448bffb2c8527bb5f0e3291f1df8c7da8b62132eb22a0898e1ec9be
+  derived_from: null
+  files:
+  - source_path: definition.yaml
+    runtime_path: definition.yaml
+    sha256: 00959b1eca23fede930b8ceebf82a4b756be86d36fe575617e4d6afcdbad8072
+  - source_path: visualizations/payables.yaml
+    runtime_path: visualizations/payables.yaml
+    sha256: 056968744bad993f3993251ad4209b4193864f0c1378b650b2808962e1f4fc4d
+- selection:
+    lineage_id: 0aa135c3-bdfb-4551-9b99-5a3e30add6d2
+    kind: presentation
+    key: record-invoice_review
+    revision: 1
+    content_sha256: 13f9ecc7bf4439bf7b30be461ebba113ee40a02a44a719125aebec4fc49d6546
+  derived_from: null
+  files:
+  - source_path: presentations/record-invoice_review.yaml
+    runtime_path: presentation.yaml
+    sha256: e094c3e78e1c061ccdc19b2f0ff2c514701ccfb452255cb2c63dcd4ceecb781b
+bindings:
+- binding_key: definition
+  component:
+    kind: definition
+    key: definition
+  destination:
+    kind: definition
+  readiness: ready
+- binding_key: record-invoice_review
+  component:
+    kind: presentation
+    key: record-invoice_review
+  destination:
+    kind: business_record_presentation
+    record_key: invoice_review
+    key: record-invoice_review
+  readiness: ready
