@@ -1,2 +1,9 @@
 format_version: 1
-apps: []
+apps:
+- app_slug: mini_ap
+  package_id: 7ef1b097-3471-419b-a6e6-02177b62c183
+  release: '5'
+  tag: 7ef1b097-3471-419b-a6e6-02177b62c183/5
+  package_sha256: 272140bed32f85bf07b49750de278dff313c5be1de86558400318579961dd50d
+  supported_on_core: 64683d2794b801452aa302d1e0a0d31672e8f17e
+  tenants: all
