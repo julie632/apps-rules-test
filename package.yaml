@@ -1,20 +1,23 @@
 format_version: 2
 package_id: 420a8598-12f5-49bd-ace1-121cf19b955f
 app_slug: e2e_lab
-release: '1'
-parents: []
+release: '2'
+parents:
+- package_id: 420a8598-12f5-49bd-ace1-121cf19b955f
+  release: '1'
+  content_sha256: b3d0aef13c07f66a65998e6a1a074fa3dfcc398f1acf061552b374fc4eddf534
 components:
 - selection:
     lineage_id: 0e66b783-3dcf-41a5-b064-2f50a102ce35
     kind: definition
     key: definition
-    revision: 1
-    content_sha256: dd6e45d2fc129fc22f2d7cbf6762578244f1398eca4b8be33b806f819868769c
+    revision: 2
+    content_sha256: 73e2d94bb4fb39dd0cfe09d3939c7cc3dc4ce5f5f30be7f235f341fc9b6c3f3d
   derived_from: null
   files:
   - source_path: definition.yaml
     runtime_path: definition.yaml
-    sha256: 30562cc2c2d2d69131de2f746fc160525450e1e47749e57c83e3a122784fd788
+    sha256: 27ced79815642c1f729aec9511f1ec95ff4a67ea37cdc3d9e1e642e9089fc11f
   - source_path: visualizations/payables.yaml
     runtime_path: visualizations/payables.yaml
     sha256: 840bf5ebe8a4b361b0ee20f3fe0d2571d87afe4c1beb0a1582f8ba014a874fb8

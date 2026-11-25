@@ -1,6 +1,6 @@
 visualization_contract: 1
 app_slug: e2e_lab
-name: "E2E Lab, edited"
+name: "E2E Lab, release 2"
 description: A small accounts-payable workspace for reviewing invoices and planning payments. Fictional data; no bank transfers.
 lucide_icon: receipt
 contexts: []
